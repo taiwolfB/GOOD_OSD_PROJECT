@@ -9,7 +9,6 @@ ExSystemTimerTick(
     )
 {
     ThreadTick();
-
     // Laura:
     ExTimerCheckAll();
 }

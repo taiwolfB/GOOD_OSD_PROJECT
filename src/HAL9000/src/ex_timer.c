@@ -4,7 +4,6 @@
 #include "thread_internal.h"
 #include "test_common.h"
 
-
 // Laura:
 typedef struct _GLOBAL_TIMER_LIST {
     // protect the global timer list

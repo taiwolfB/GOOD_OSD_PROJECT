@@ -25,7 +25,6 @@ typedef struct _EX_TIMER
     // Laura:
     // keep track of threads waiting ( blocked ) for the timer
     EX_EVENT            TimerEvent;
-
     // Laura:
     // used to place the timer in a global timer list
     LIST_ENTRY          TimerListElem;
