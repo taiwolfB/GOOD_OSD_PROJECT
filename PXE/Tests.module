@@ -1,0 +1,25 @@
+/log ON
+/loglevel 0
+/logcomp 8000
+/run testthreadprioritydonationchain 16
+/run testthreadprioritydonationlower 16
+/run testthreadprioritydonationmulti 16
+/run testthreadprioritydonationmultiinverted 16
+/run testthreadprioritydonationmultithreads 16
+/run testthreadprioritydonationmultithreadsinverted 16
+/run testthreadprioritydonationnest 16
+/run testthreadprioritydonationonce 16
+/run testthreadprioritymutex 16
+/run testthreadpriorityroundrobin 16
+/run testthreadprioritywakeup 16
+/run testthreadpriorityyield 16
+/run testthreadtimerabsolute 16
+/run testthreadtimerabsolutepassed 16
+/run testthreadtimermultiplethreads 16
+/run testthreadtimermultipletimers 16
+/run testthreadtimerperiodicmultiple 16
+/run testthreadtimerperiodiconce 16
+/run testthreadtimerperiodiczero 16
+/run testthreadtimerrelative 16
+/run testthreadtimerrelativezero 16
+/shutdown
