@@ -14,6 +14,8 @@ typedef struct _MUTEX
     LIST_ENTRY          WaitingList;
     struct _THREAD*     Holder;
 
+    // Bogdan:
+    // A field to keep track of the list entry to be added/removed to the AcquiredMutexesList.
     LIST_ENTRY          AcquiredMutexListElem;
 } MUTEX, *PMUTEX;
 
@@ -61,13 +63,4 @@ REQUIRES_EXCL_LOCK(*Mutex)
 void
 MutexRelease(
     INOUT       PMUTEX      Mutex
-    );
-
-
-static
-INT64
-(__cdecl _ThreadComparePriorityReadyList)
-(IN      PLIST_ENTRY     FirstElem,
-    IN      PLIST_ENTRY     SecondElem,
-    IN_OPT  PVOID           Context
     );

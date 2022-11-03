@@ -9,7 +9,6 @@
 #include "isr.h"
 #include "gdtmu.h"
 #include "pe_exports.h"
-#include "log.h"
 
 #define TID_INCREMENT               4
 
@@ -42,6 +41,9 @@ typedef struct _THREAD_SYSTEM_DATA
 
 static THREAD_SYSTEM_DATA m_threadSystemData;
 
+// Bogdan: 
+// A context used to propagate the thread's maximum priority from the 
+// ThreadRecomputePriority to the subsequent functions and backwards.
 typedef struct _PRIORITY_DONATION_CTX
 {
     THREAD_PRIORITY maximumPriority;
@@ -666,12 +668,13 @@ ThreadSetPriority(
     )
 {
     ASSERT(ThreadPriorityLowest <= NewPriority && NewPriority <= ThreadPriorityMaximum);
+    // Bogdan: 
+    // In case in which a thread wants to increase his own real priority, 
+    // then an effective priority must be assigned as well.
     PTHREAD pCurrentThread = GetCurrentThread();
     pCurrentThread->RealPriority = NewPriority;
     if(NewPriority > pCurrentThread->Priority)
       ThreadRecomputePriority(pCurrentThread);
-    
-   
 }
 
 STATUS
@@ -804,6 +807,8 @@ _ThreadInit(
         pThread->Id = _ThreadSystemGetNextTid();
         pThread->State = ThreadStateBlocked;
         pThread->Priority = Priority;
+        // Bogdan:
+        // Initialize the new added fields.
         pThread->RealPriority = Priority;
         pThread->WaitedMutex = NULL; // at the start, the thread is not waiting for anything
         InitializeListHead(&pThread->AcquiredMutexesList);
@@ -1253,7 +1258,8 @@ _ThreadKernelFunction(
     NOT_REACHED;
 }
 
-
+// Bogdan:
+// Function used to find the maximum priority between two threads in the waiting list.
 STATUS
 (__cdecl RecomputePriorityForEachThreadInWaitingList) (
     IN      PLIST_ENTRY     ListEntry,
@@ -1271,6 +1277,8 @@ STATUS
     return STATUS_SUCCESS;
 }
 
+// Bogdan: 
+// Function used to recompute priority for each mutex acquired by a specific thread.
 STATUS
 (__cdecl RecomputePriorityForEachMutex) (
     IN      PLIST_ENTRY     ListEntry,
@@ -1282,6 +1290,9 @@ STATUS
     return STATUS_SUCCESS;
 }
 
+// Bogdan:
+// Function used to recompute the priority of a thread, considering that the thread 
+// might have mutexes acquired which can have a list of threads waiting for them.
 void
 ThreadRecomputePriority(
     INOUT   PTHREAD     Thread
@@ -1296,7 +1307,8 @@ ThreadRecomputePriority(
 
 
 
-
+// Bogdan:
+// Function used to solve the priority donation and chained priority donation problem.
 void
 ThreadDonatePriority(
     INOUT PTHREAD  currentThread,
@@ -1328,3 +1340,28 @@ ThreadDonatePriority(
     } while (MutexHolder != NULL);
 }
 
+
+INT64
+(__cdecl ThreadComparePriorityReadyList)
+(IN      PLIST_ENTRY     FirstElem,
+    IN      PLIST_ENTRY     SecondElem,
+    IN_OPT  PVOID           Context) {
+
+    UNREFERENCED_PARAMETER(Context);
+
+    PTHREAD t1 = CONTAINING_RECORD(FirstElem, THREAD, ReadyList);
+    PTHREAD t2 = CONTAINING_RECORD(SecondElem, THREAD, ReadyList);
+
+    THREAD_PRIORITY p1 = ThreadGetPriority(t1);
+    THREAD_PRIORITY p2 = ThreadGetPriority(t2);
+
+    if (p1 < p2) {
+        return 1;
+    }
+    else if (p1 > p2) {
+        return -1;
+    }
+    else {
+        return 0;
+    }
+}

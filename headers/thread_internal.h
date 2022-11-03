@@ -4,6 +4,9 @@
 #include "ref_cnt.h"
 #include "ex_event.h"
 #include "thread.h"
+// Bogdan :
+// Added in order to have access to the PMUTEX type used for
+// WaitedMutex field in Thread structure.
 #include "mutex.h"
 
 typedef enum _THREAD_STATE
@@ -44,9 +47,18 @@ typedef struct _THREAD
     // Currently the thread priority is not used for anything
     THREAD_PRIORITY         Priority;
 
+    // Bogdan:
+    // Field used to keep track of the original priority of the thread,
+    // the one which was given at thread creation such that it can be
+    // restored after priority donation, on lock release.
     THREAD_PRIORITY         RealPriority;
+    // Bogdan:
+    // A list used to hold the mutexes which were acquired by this thread.
     LIST_ENTRY              AcquiredMutexesList;
+    // Bogdan:
+    // A field to keep track of the mutex after which the thread is waiting for.
     PMUTEX                  WaitedMutex;
+
     THREAD_STATE            State;
 
     // valid only if State == ThreadStateTerminated
@@ -314,5 +326,25 @@ void
 ThreadDonatePriority(
     INOUT PTHREAD  currentThread,
     INOUT PTHREAD MutexHolder
+    );
+
+
+//******************************************************************************
+// Function:     ThreadComparePriorityReadyList
+// Description:  Compares the List entries which are supposed to point to entries 
+//               of type PTHREAD in the first two parameters and returns
+//               1 if the first is smaller, -1 if the second is smaller or 
+//               0 if they are equal.
+// Returns:      INT64
+// Parameter:    IN PLIST_ENTRY FirstElem - The first list entry to be compared.
+//               IN PLIST_ENTRY SecondElem - The second  list entry to be compared.
+//               IN_OPT PVOID Context - extra parameters for the function, 
+//               should be unreferenced.
+//******************************************************************************
+INT64
+(__cdecl ThreadComparePriorityReadyList)
+(   IN      PLIST_ENTRY     FirstElem,
+    IN      PLIST_ENTRY     SecondElem,
+    IN_OPT  PVOID           Context
     );
 

@@ -41,7 +41,7 @@ _ThreadValidatePriority(
 
     if (ThreadGetPriority(NULL) != ExpectedPriority)
     {
-        LOG_ERROR("Thread should have priority %u, actual priority is %u\n", GetCurrentThread()->Id,
+        LOG_ERROR("Thread should have priority %u, actual priority is %u\n",
                   ExpectedPriority, ThreadGetPriority(NULL));
         return FALSE;
     }
