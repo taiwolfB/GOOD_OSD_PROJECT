@@ -287,3 +287,32 @@ void
 ThreadSetPriority(
     IN      THREAD_PRIORITY     NewPriority
     );
+
+
+//******************************************************************************
+// Function:     ThreadRecomputePriority
+// Description:  Recomputes the priority of a thread based on the waiting list 
+//               and based on the mutexes held by that thread.
+// Returns:      void
+// Parameter:    IN_OUT PTHREAD Thread - Thread which needs
+//               to have his priority recomputed.
+//******************************************************************************
+void
+ThreadRecomputePriority(
+    INOUT   PTHREAD     Thread
+    );
+
+//******************************************************************************
+// Function:     ThreadDonatePriority
+// Description:  Donates the priority of the currentThread to the mutexHolder
+//               and resolves the chain donation problem.
+// Returns:      void
+// Parameter:    INOUT PTHREAD currentThread - Thread which donates the priority.
+//               INOUT PTHREAD MutexHolder - Thread which receives the priority.  
+//******************************************************************************
+void
+ThreadDonatePriority(
+    INOUT PTHREAD  currentThread,
+    INOUT PTHREAD MutexHolder
+    );
+
