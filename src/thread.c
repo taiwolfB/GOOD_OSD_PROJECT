@@ -782,7 +782,7 @@ ThreadSetPriority(
 	for (PLIST_ENTRY pEntry = ListIteratorNext(&it); pEntry != NULL; pEntry = ListIteratorNext(&it))
 	{
 		PTHREAD pThread = CONTAINING_RECORD(pEntry, THREAD, ReadyList);
-		if (pThread->Priority < NewPriority)
+		if (pThread->Priority > GetCurrentThread()->Priority)
 		{
             found = TRUE;
 			break;
