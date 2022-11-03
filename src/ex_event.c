@@ -97,6 +97,8 @@ ExEventWaitForSignal(
     while (TRUE != _InterlockedCompareExchange8(&Event->Signaled, newState, TRUE))
     {
         LockAcquire(&Event->EventLock, &dummyState);
+        //David:
+        //Changed to insert in an ordered fashion the threads in the ready list
         //InsertTailList(&Event->WaitingList, &pCurrentThread->ReadyList);
 		//Replaced with InsertOrderedList
 		InsertOrderedList(&Event->WaitingList, &pCurrentThread->ReadyList, ThreadComparePriorityReadyList, NULL);

@@ -9,6 +9,8 @@
 #include "isr.h"
 #include "gdtmu.h"
 #include "pe_exports.h"
+//David:
+// Added the necessary includes for the new functions
 #include "smp.h"
 #include "log.h"
 
@@ -133,7 +135,8 @@ _ThreadKernelFunction(
     );
 
 static FUNC_ThreadStart     _IdleThread;
-
+//David:
+// This function is used by the InsertOrderedList function to compare the priorities of two threads so that the items are inserted in order in the list
 INT64
 ThreadComparePriorityReadyList(IN PLIST_ENTRY e1, 
     IN PLIST_ENTRY e2,
@@ -528,6 +531,8 @@ ThreadYield(
     LockAcquire(&m_threadSystemData.ReadyThreadsLock, &dummyState);
     if (pThread != pCpu->ThreadData.IdleThread)
     {
+        //David:
+        // Made the thread to be inserted in a order fashion in the ready list
         //InsertTailList(&m_threadSystemData.ReadyThreadsList, &pThread->ReadyList);
 		//Replaced with InsertOrderedList function
 		InsertOrderedList(&m_threadSystemData.ReadyThreadsList, &pThread->ReadyList, ThreadComparePriorityReadyList, NULL);
@@ -570,7 +575,9 @@ ThreadBlock(
     ASSERT( !LockIsOwner(&m_threadSystemData.ReadyThreadsLock));
 }
 
-
+//David:
+// This function is currently unused in the code, but it can be activated in the ThreadBlock function to make that function more efficient
+// This function gets the min priority of a thread that is currentlly running on the CPU
 THREAD_PRIORITY
 GetMinPriorityOfRunningThreads(
 void
@@ -613,6 +620,8 @@ ThreadUnblock(
     ASSERT(ThreadStateBlocked == Thread->State);
 	
     LockAcquire(&m_threadSystemData.ReadyThreadsLock, &dummyState);
+    //David:
+    // Made the thread to be inserted in a order fashion in the ready list
     //InsertTailList(&m_threadSystemData.ReadyThreadsList, &Thread->ReadyList);
     //Changed with InsertOrderedList
     InsertOrderedList(&m_threadSystemData.ReadyThreadsList, &Thread->ReadyList, ThreadComparePriorityReadyList, NULL);
@@ -620,6 +629,7 @@ ThreadUnblock(
     LockRelease(&m_threadSystemData.ReadyThreadsLock, dummyState);
     LockRelease(&Thread->BlockLock, oldState);
 
+    //David:
 	//send ipi so each cpu will then call ThreadYield if the unblocked thread has higher priority than any running thread
     //if (ThreadGetPriority(Thread) > GetMinPriorityOfRunningThreads()) {
 		    SMP_DESTINATION dest = { 0 };
@@ -749,7 +759,8 @@ ThreadSetPriority(
 {
     ASSERT(ThreadPriorityLowest <= NewPriority && NewPriority <= ThreadPriorityMaximum);
     GetCurrentThread()->Priority = NewPriority;
-	
+
+	//David:
     /*if a currently running thread calling ThreadSetPriority() would de - crease its priority, there could be two subcases :
     (a) if the new priority is larger than those of all threads in ready list,
         noting should happen, while this is equivalent to the previous case;
@@ -920,6 +931,8 @@ _ThreadInit(
         LockInit(&pThread->BlockLock);
 
         LockAcquire(&m_threadSystemData.AllThreadsLock, &oldIntrState);
+        //David:
+        //add the thread to the allThreadsList in order
         //InsertTailList(&m_threadSystemData.AllThreadsList, &pThread->AllList);
 		//Replace with InsertOrtderList
         InsertOrderedList(&m_threadSystemData.AllThreadsList, &pThread->AllList, ThreadComparePriorityReadyList, NULL);
