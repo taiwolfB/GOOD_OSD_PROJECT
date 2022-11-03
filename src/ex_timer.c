@@ -59,7 +59,7 @@ ExTimerInit(
     OUT     PEX_TIMER       Timer,
     IN      EX_TIMER_TYPE   Type,
     IN      QWORD           Time
-)
+    )
 {
     STATUS status;
     INTR_STATE dummyState;
@@ -110,7 +110,7 @@ ExTimerInit(
 void
 ExTimerStart(
     IN      PEX_TIMER       Timer
-)
+    )
 {
     ASSERT(Timer != NULL);
 
@@ -125,7 +125,7 @@ ExTimerStart(
 void
 ExTimerStop(
     IN      PEX_TIMER       Timer
-)
+    )
 {
     ASSERT(Timer != NULL);
 
@@ -144,7 +144,7 @@ ExTimerStop(
 void
 ExTimerWait(
     INOUT   PEX_TIMER       Timer
-)
+    )
 {
     ASSERT(Timer != NULL);
 
@@ -163,7 +163,7 @@ ExTimerWait(
 void
 ExTimerUninit(
     INOUT   PEX_TIMER       Timer
-)
+    )
 {
     INTR_STATE dummyState;
     ASSERT(Timer != NULL);

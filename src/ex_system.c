@@ -6,7 +6,7 @@
 void
 ExSystemTimerTick(
     void
-)
+    )
 {
     ThreadTick();
     // Laura:
