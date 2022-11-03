@@ -1,7 +1,6 @@
 #include "HAL9000.h"
 #include "thread_internal.h"
 #include "mutex.h"
-#include "thread.h"
 
 #define MUTEX_MAX_RECURSIVITY_DEPTH         MAX_BYTE
 
@@ -56,9 +55,7 @@ MutexAcquire(
 
     while (Mutex->Holder != pCurrentThread)
     {
-        //InsertTailList(&Mutex->WaitingList, &pCurrentThread->ReadyList);
-		//Replaced with InsertOrderedList
-		InsertOrderedList(&Mutex->WaitingList, &pCurrentThread->ReadyList,ThreadComparePriorityReadyList, NULL);
+        InsertTailList(&Mutex->WaitingList, &pCurrentThread->ReadyList);
         ThreadTakeBlockLock();
         LockRelease(&Mutex->MutexLock, dummyState);
         ThreadBlock();
