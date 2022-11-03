@@ -1480,27 +1480,27 @@ ThreadDonatePriority(
 }
 
 
-INT64
-(__cdecl ThreadComparePriorityReadyList)
-(IN      PLIST_ENTRY     FirstElem,
-    IN      PLIST_ENTRY     SecondElem,
-    IN_OPT  PVOID           Context) {
-
-    UNREFERENCED_PARAMETER(Context);
-
-    PTHREAD t1 = CONTAINING_RECORD(FirstElem, THREAD, ReadyList);
-    PTHREAD t2 = CONTAINING_RECORD(SecondElem, THREAD, ReadyList);
-
-    THREAD_PRIORITY p1 = ThreadGetPriority(t1);
-    THREAD_PRIORITY p2 = ThreadGetPriority(t2);
-
-    if (p1 < p2) {
-        return 1;
-    }
-    else if (p1 > p2) {
-        return -1;
-    }
-    else {
-        return 0;
-    }
-}
+//INT64
+//(__cdecl ThreadComparePriorityReadyList)
+//(IN      PLIST_ENTRY     FirstElem,
+//    IN      PLIST_ENTRY     SecondElem,
+//    IN_OPT  PVOID           Context) {
+//
+//    UNREFERENCED_PARAMETER(Context);
+//
+//    PTHREAD t1 = CONTAINING_RECORD(FirstElem, THREAD, ReadyList);
+//    PTHREAD t2 = CONTAINING_RECORD(SecondElem, THREAD, ReadyList);
+//
+//    THREAD_PRIORITY p1 = ThreadGetPriority(t1);
+//    THREAD_PRIORITY p2 = ThreadGetPriority(t2);
+//
+//    if (p1 < p2) {
+//        return 1;
+//    }
+//    else if (p1 > p2) {
+//        return -1;
+//    }
+//    else {
+//        return 0;
+//    }
+//}
