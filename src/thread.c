@@ -767,7 +767,13 @@ ThreadSetPriority(
     )
 {
     ASSERT(ThreadPriorityLowest <= NewPriority && NewPriority <= ThreadPriorityMaximum);
-    GetCurrentThread()->Priority = NewPriority;
+    // Bogdan: 
+    // In case in which a thread wants to increase his own real priority, 
+    // then an effective priority must be assigned as well.
+    PTHREAD pCurrentThread = GetCurrentThread();
+    pCurrentThread->RealPriority = NewPriority;
+    if (NewPriority > pCurrentThread->Priority)
+    ThreadRecomputePriority(pCurrentThread);
 
 	//David:
     /*if a currently running thread calling ThreadSetPriority() would de - crease its priority, there could be two subcases :
@@ -780,7 +786,7 @@ ThreadSetPriority(
         */
 	// see if the new priority is smaller than one of threads in ready list
 	BOOLEAN found = FALSE;
-    //get readyThreadlock
+    // get readyThreadlock
 	
 	INTR_STATE dummyState;
     LockAcquire(&m_threadSystemData.ReadyThreadsLock, &dummyState);
@@ -791,7 +797,7 @@ ThreadSetPriority(
 	for (PLIST_ENTRY pEntry = ListIteratorNext(&it); pEntry != NULL; pEntry = ListIteratorNext(&it))
 	{
 		PTHREAD pThread = CONTAINING_RECORD(pEntry, THREAD, ReadyList);
-		if (pThread->Priority < NewPriority)
+		if (pThread->Priority > GetCurrentThread()->Priority)
 		{
             found = TRUE;
 			break;
@@ -947,7 +953,7 @@ _ThreadInit(
         LockAcquire(&m_threadSystemData.AllThreadsLock, &oldIntrState);
         //David:
         //add the thread to the allThreadsList in order
-        //InsertTailList(&m_threadSystemData.AllThreadsList, &pThread->AllList);
+       // InsertTailList(&m_threadSystemData.AllThreadsList, &pThread->AllList);
 		//Replace with InsertOrtderList
         InsertOrderedList(&m_threadSystemData.AllThreadsList, &pThread->AllList, ThreadComparePriorityReadyList, NULL);
         LockRelease(&m_threadSystemData.AllThreadsLock, oldIntrState);
@@ -1478,29 +1484,3 @@ ThreadDonatePriority(
         }
     } while (MutexHolder != NULL);
 }
-
-
-//INT64
-//(__cdecl ThreadComparePriorityReadyList)
-//(IN      PLIST_ENTRY     FirstElem,
-//    IN      PLIST_ENTRY     SecondElem,
-//    IN_OPT  PVOID           Context) {
-//
-//    UNREFERENCED_PARAMETER(Context);
-//
-//    PTHREAD t1 = CONTAINING_RECORD(FirstElem, THREAD, ReadyList);
-//    PTHREAD t2 = CONTAINING_RECORD(SecondElem, THREAD, ReadyList);
-//
-//    THREAD_PRIORITY p1 = ThreadGetPriority(t1);
-//    THREAD_PRIORITY p2 = ThreadGetPriority(t2);
-//
-//    if (p1 < p2) {
-//        return 1;
-//    }
-//    else if (p1 > p2) {
-//        return -1;
-//    }
-//    else {
-//        return 0;
-//    }
-//}

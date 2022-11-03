@@ -80,10 +80,10 @@ MutexAcquire(
             ThreadDonatePriority(pCurrentThread, Mutex->Holder);
         }
 
-        // Bogdan: 
-        // Add the thread to the waiting list by the priority, decreasing, 
-        // such that we have a waiting list of threads ordered by priority, 
-        // in  order to facilitate priority scheduling.
+        //David:
+        // Changed to insert threads in an ordered fashion in the ready list
+        //InsertTailList(&Mutex->WaitingList, &pCurrentThread->ReadyList);
+        //Replaced with InsertOrderedList
         InsertOrderedList(&Mutex->WaitingList, &pCurrentThread->ReadyList, ThreadComparePriorityReadyList, NULL);
         // Bogdan:
         // Set the mutex which the thread will be waiting for to the current one
