@@ -37,12 +37,21 @@ typedef struct _THREAD_SYSTEM_DATA
     LIST_ENTRY          AllThreadsList;
 
     LOCK                ReadyThreadsLock;
-	
+
     _Guarded_by_(ReadyThreadsLock)
     LIST_ENTRY          ReadyThreadsList;
 } THREAD_SYSTEM_DATA, *PTHREAD_SYSTEM_DATA;
 
+
 static THREAD_SYSTEM_DATA m_threadSystemData;
+
+// Bogdan: 
+// A context used to propagate the thread's maximum priority from the 
+// ThreadRecomputePriority to the subsequent functions and backwards.
+typedef struct _PRIORITY_DONATION_CTX
+{
+    THREAD_PRIORITY maximumPriority;
+} PRIORITY_DONATION_CTX, *PPRIORITY_DONATION_CTX;
 
 __forceinline
 static
@@ -141,7 +150,7 @@ INT64
 ThreadComparePriorityReadyList(IN PLIST_ENTRY e1, 
     IN PLIST_ENTRY e2,
     IN_OPT PVOID Context){
-	
+
 	UNREFERENCED_PARAMETER(Context);
     //TODO
 	//compare the two threads priority and return the result such that to
@@ -618,7 +627,7 @@ ThreadUnblock(
     LockAcquire(&Thread->BlockLock, &oldState);
 
     ASSERT(ThreadStateBlocked == Thread->State);
-	
+
     LockAcquire(&m_threadSystemData.ReadyThreadsLock, &dummyState);
     //David:
     // Made the thread to be inserted in a order fashion in the ready list
@@ -927,7 +936,12 @@ _ThreadInit(
         pThread->Id = _ThreadSystemGetNextTid();
         pThread->State = ThreadStateBlocked;
         pThread->Priority = Priority;
-
+        // Bogdan:
+        // Initialize the new added fields.
+        pThread->RealPriority = Priority;
+        pThread->WaitedMutex = NULL; // at the start, the thread is not waiting for anything
+        InitializeListHead(&pThread->AcquiredMutexesList);
+        
         LockInit(&pThread->BlockLock);
 
         LockAcquire(&m_threadSystemData.AllThreadsLock, &oldIntrState);
@@ -1119,7 +1133,7 @@ _ThreadSchedule(
     // get next thread
     pNextThread = _ThreadGetReadyThread();
     ASSERT( NULL != pNextThread );
-	
+
 	//log the id of the thread that is being scheduled
 	//LOG("Thread %d is being scheduled\n", pNextThread->Id);
 	//LOG("Current thread %d \n", pCurrentThread->Id);
@@ -1381,4 +1395,112 @@ _ThreadKernelFunction(
 
     ThreadExit(exitStatus);
     NOT_REACHED;
+}
+
+// Bogdan:
+// Function used to find the maximum priority between two threads in the waiting list.
+STATUS
+(__cdecl RecomputePriorityForEachThreadInWaitingList) (
+    IN      PLIST_ENTRY     ListEntry,
+    IN_OPT  PVOID           FunctionContext
+    )
+{
+    ASSERT(FunctionContext != NULL);
+    PPRIORITY_DONATION_CTX priorityDonationContext = (PPRIORITY_DONATION_CTX)FunctionContext;
+    PTHREAD pThread = CONTAINING_RECORD(ListEntry, THREAD, ReadyList);
+
+    if (priorityDonationContext->maximumPriority < ThreadGetPriority(pThread)) {
+        priorityDonationContext->maximumPriority = ThreadGetPriority(pThread);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+// Bogdan: 
+// Function used to recompute priority for each mutex acquired by a specific thread.
+STATUS
+(__cdecl RecomputePriorityForEachMutex) (
+    IN      PLIST_ENTRY     ListEntry,
+    IN_OPT  PVOID           FunctionContext
+    ) 
+{
+    PMUTEX  waitedMutex = CONTAINING_RECORD(ListEntry, MUTEX, AcquiredMutexListElem);
+    ForEachElementExecute(&waitedMutex->WaitingList, RecomputePriorityForEachThreadInWaitingList, FunctionContext, FALSE);
+    return STATUS_SUCCESS;
+}
+
+// Bogdan:
+// Function used to recompute the priority of a thread, considering that the thread 
+// might have mutexes acquired which can have a list of threads waiting for them.
+void
+ThreadRecomputePriority(
+    INOUT   PTHREAD     Thread
+    )
+{   
+    PRIORITY_DONATION_CTX priorityDonationContext = { 0 };
+    priorityDonationContext.maximumPriority = Thread->RealPriority;
+    ForEachElementExecute(&Thread->AcquiredMutexesList, RecomputePriorityForEachMutex, &priorityDonationContext, FALSE);
+ 
+    Thread->Priority = priorityDonationContext.maximumPriority;
+}
+
+
+
+// Bogdan:
+// Function used to solve the priority donation and chained priority donation problem.
+void
+ThreadDonatePriority(
+    INOUT PTHREAD  currentThread,
+    INOUT PTHREAD MutexHolder
+)
+{
+    ASSERT(currentThread != NULL);
+    ASSERT(MutexHolder != NULL);
+
+    do {
+        if (ThreadGetPriority(currentThread) > ThreadGetPriority(MutexHolder))
+        {
+            MutexHolder->Priority = currentThread->Priority;
+        }
+        else
+        {
+            break;
+        }
+
+        if (MutexHolder->WaitedMutex)
+        {
+            currentThread = MutexHolder;
+            MutexHolder = MutexHolder->WaitedMutex->Holder;
+        }
+        else 
+        {
+            MutexHolder = NULL;
+        }
+    } while (MutexHolder != NULL);
+}
+
+
+INT64
+(__cdecl ThreadComparePriorityReadyList)
+(IN      PLIST_ENTRY     FirstElem,
+    IN      PLIST_ENTRY     SecondElem,
+    IN_OPT  PVOID           Context) {
+
+    UNREFERENCED_PARAMETER(Context);
+
+    PTHREAD t1 = CONTAINING_RECORD(FirstElem, THREAD, ReadyList);
+    PTHREAD t2 = CONTAINING_RECORD(SecondElem, THREAD, ReadyList);
+
+    THREAD_PRIORITY p1 = ThreadGetPriority(t1);
+    THREAD_PRIORITY p2 = ThreadGetPriority(t2);
+
+    if (p1 < p2) {
+        return 1;
+    }
+    else if (p1 > p2) {
+        return -1;
+    }
+    else {
+        return 0;
+    }
 }

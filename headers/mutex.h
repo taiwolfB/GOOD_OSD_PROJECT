@@ -13,6 +13,10 @@ typedef struct _MUTEX
     _Guarded_by_(MutexLock)
     LIST_ENTRY          WaitingList;
     struct _THREAD*     Holder;
+
+    // Bogdan:
+    // A field to keep track of the list entry to be added/removed to the AcquiredMutexesList.
+    LIST_ENTRY          AcquiredMutexListElem;
 } MUTEX, *PMUTEX;
 
 //******************************************************************************
