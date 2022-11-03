@@ -282,3 +282,15 @@ void
 ThreadSetPriority(
     IN      THREAD_PRIORITY     NewPriority
     );
+
+
+INT64
+ThreadComparePriorityReadyList(IN PLIST_ENTRY e1,
+    IN PLIST_ENTRY e2,
+    IN_OPT PVOID Context);
+
+
+STATUS
+(__cdecl ThreadYieldForIpi)(
+    IN_OPT  PVOID   Context
+    );
