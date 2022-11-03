@@ -1,9 +1,6 @@
 #include "HAL9000.h"
 #include "thread_internal.h"
 #include "mutex.h"
-//David:
-// Added the necessary includes for the new functions
-#include "thread.h"
 
 #define MUTEX_MAX_RECURSIVITY_DEPTH         MAX_BYTE
 
