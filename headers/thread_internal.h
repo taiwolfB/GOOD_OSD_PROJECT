@@ -106,7 +106,10 @@ typedef struct _THREAD
     // MUST be non-NULL for all threads which belong to user-mode processes
     PVOID                   UserStack;
 
-    struct _PROCESS*        Process;        
+    struct _PROCESS*        Process;
+
+    // An entry  to the Threadtable of the process which created the thread.
+    HASH_ENTRY              ThreadTableEntry;
 } THREAD, *PTHREAD;
 
 //******************************************************************************

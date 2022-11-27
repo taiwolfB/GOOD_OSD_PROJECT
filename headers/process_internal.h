@@ -5,6 +5,8 @@
 #include "process.h"
 #include "synch.h"
 #include "ex_event.h"
+#include "hash_table.h"
+#include "syscall_defs.h"
 
 #define PROCESS_MAX_PHYSICAL_FRAMES     16
 #define PROCESS_MAX_OPEN_FILES          16
@@ -58,6 +60,24 @@ typedef struct _PROCESS
 
     // VaSpace used only for UM virtual memory allocations
     struct _VMM_RESERVATION_SPACE*  VaSpace;
+
+    // Hash table containing entries of the form (UM_HANDLE, PROCESS), 
+    // representing the child processes created by the current process.
+    HASH_TABLE                      ChildProcessTable;
+
+    // Hash table containing entries of the form (UM_HANDLE, THREAD), 
+    // representing the threads created by the current process.
+
+    HASH_TABLE                      ThreadTable;
+    // Hash table containing entries of the form (UM_HANDLE, FILE_OBJECT), 
+    // representing the files created by the current process.
+    HASH_TABLE                      FileTable;
+
+    // Hash entry representing the entry in the ChildProcessTable of the parent process.
+    HASH_ENTRY                      ChildProcessEntry;
+
+    // The value of the latest created handle.
+    UM_HANDLE                       CurrentMaximumHandle;
 } PROCESS, *PPROCESS;
 
 //******************************************************************************
@@ -80,7 +100,7 @@ ProcessSystemPreinit(
 // Parameter:    void
 //******************************************************************************
 _No_competing_thread_
-STATUS
+STATUS                      
 ProcessSystemInitSystemProcess(
     void
     );

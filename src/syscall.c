@@ -62,12 +62,40 @@ SyscallHandler(
         pSyscallParameters = (PQWORD)usermodeProcessorState->RegisterValues[RegisterRbp] + 1;
 
         // Dispatch syscalls
+        LOG("System call ID is %u\n", sysCallId);
         switch (sysCallId)
         {
         case SyscallIdIdentifyVersion:
             status = SyscallValidateInterface((SYSCALL_IF_VERSION)*pSyscallParameters);
             break;
-        // STUDENT TODO: implement the rest of the syscalls
+        //case SyscallIdProcessCreate:
+        //    status = SyscallProcessCreate(
+        //        (char*)pSyscallParameters[0],
+        //        (QWORD)pSyscallParameters[1],
+        //        (char*)pSyscallParameters[2],
+        //        (QWORD)pSyscallParameters[3],
+        //        (UM_HANDLE*)pSyscallParameters[4]);
+        case SyscallIdProcessExit:
+            status = SyscallProcessExit((STATUS)pSyscallParameters[0]);
+            break;
+        //case SyscallIdProcessGetPid:
+        //    status = SyscallProcessGetPid(
+        //        (UM_HANDLE)pSyscallParameters[0],
+        //        (PID*)pSyscallParameters[1]);
+        case SyscallIdFileWrite:
+            status = SyscallFileWrite(
+                (UM_HANDLE)pSyscallParameters[0],
+                (PVOID)pSyscallParameters[1],
+                (QWORD)pSyscallParameters[2],
+                (QWORD*)pSyscallParameters[3]);
+            break;
+        //case SyscallIdFileCreate:
+        //    status = SyscallFileCreate(
+        //        (char*)pSyscallParameters[0], 
+        //        (QWORD)pSyscallParameters[1],
+        //        (BOOLEAN)pSyscallParameters[2],
+        //        (BOOLEAN)pSyscallParameters[3],
+        //        (UM_HANDLE*)pSyscallParameters[4]);
         default:
             LOG_ERROR("Unimplemented syscall called from User-space!\n");
             status = STATUS_UNSUPPORTED;
@@ -169,4 +197,77 @@ SyscallValidateInterface(
     return STATUS_SUCCESS;
 }
 
-// STUDENT TODO: implement the rest of the syscalls
+STATUS
+SyscallProcessExit(
+    IN      STATUS                  ExitStatus
+    )
+{
+    PPROCESS PProcess = GetCurrentProcess();
+    PProcess->TerminationStatus = ExitStatus;
+    ProcessTerminate(PProcess);
+    return PProcess->TerminationStatus;
+}
+
+//
+//STATUS
+//SyscallProcessGetPid(
+//    IN_OPT  UM_HANDLE               ProcessHandle,
+//    OUT     PID*                    ProcessId
+//)
+//{
+//    return STATUS_SUCCESS;
+//}
+
+//STATUS
+//SyscallFileCreate(
+//    IN_READS_Z(PathLength)
+//    char* Path,
+//    IN          QWORD                   PathLength,
+//    IN          BOOLEAN                 Directory,
+//    IN          BOOLEAN                 Create,
+//    OUT         UM_HANDLE* FileHandle
+//)
+//{
+//    return SyscallEntry(SyscallIdFileCreate, Path, PathLength, Directory, Create, FileHandle);
+//}
+
+
+//STATUS
+//SyscallProcessCreate(
+//    IN_READS_Z(PathLength)
+//    char* ProcessPath,
+//    IN          QWORD               PathLength,
+//    IN_READS_OPT_Z(ArgLength)
+//    char* Arguments,
+//    IN          QWORD               ArgLength,
+//    OUT         UM_HANDLE* ProcessHandle
+//    )
+//{
+//    
+//}
+
+
+STATUS
+SyscallFileWrite(
+    IN  UM_HANDLE                   FileHandle,
+    IN_READS_BYTES(BytesToWrite)
+    PVOID                           Buffer,
+    IN  QWORD                       BytesToWrite,
+    OUT QWORD* BytesWritten
+)
+{
+    UNREFERENCED_PARAMETER(BytesWritten);
+    UNREFERENCED_PARAMETER(BytesToWrite);
+    UNREFERENCED_PARAMETER(Buffer);
+    *BytesWritten = strlen((char*)Buffer) + 1;
+    //(char*)Buffer[*BytesToWrite]  
+    //    strlen == bytetowrite
+    //    bufer not null
+    //    poz BytesToWrite sa fie 0
+    if (FileHandle == UM_FILE_HANDLE_STDOUT) {
+        LOG("[%s]:[%s]\n", ProcessGetName(NULL), Buffer);
+        return STATUS_SUCCESS;
+    }
+
+    return STATUS_NO_HANDLING_REQUIRED;
+}
