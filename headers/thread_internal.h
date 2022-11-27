@@ -8,6 +8,7 @@
 // Added in order to have access to the PMUTEX type used for
 // WaitedMutex field in Thread structure.
 #include "mutex.h"
+#include "hash_table.h"
 
 typedef enum _THREAD_STATE
 {
