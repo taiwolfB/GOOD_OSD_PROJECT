@@ -8,6 +8,7 @@
 #include "process_internal.h"
 #include "dmp_cpu.h"
 #include "thread.h"
+#include "thread_internal.h"
 
 extern void SyscallEntry();
 
@@ -63,19 +64,34 @@ SyscallHandler(
         pSyscallParameters = (PQWORD)usermodeProcessorState->RegisterValues[RegisterRbp] + 1;
 
         // Dispatch syscalls
-        //LOG("System call ID is %u\n", sysCallId);
         switch (sysCallId)
         {
         case SyscallIdIdentifyVersion:
             status = SyscallValidateInterface((SYSCALL_IF_VERSION)*pSyscallParameters);
             break;
-        //case SyscallIdProcessCreate:
-        //    status = SyscallProcessCreate(
-        //        (char*)pSyscallParameters[0],
-        //        (QWORD)pSyscallParameters[1],
-        //        (char*)pSyscallParameters[2],
-        //        (QWORD)pSyscallParameters[3],
-        //        (UM_HANDLE*)pSyscallParameters[4]);
+        case SyscallIdThreadExit:
+            status = SyscallThreadExit((STATUS)pSyscallParameters[0]);
+            break;
+        case SyscallIdThreadCreate:
+            status = SyscallThreadCreate((PFUNC_ThreadStart)pSyscallParameters[0], (PVOID)pSyscallParameters[1], (UM_HANDLE*)pSyscallParameters[2]);
+            break;
+        case SyscallIdThreadGetTid:
+            status = SyscallThreadGetTid((UM_HANDLE)pSyscallParameters[0], (TID*)pSyscallParameters[1]);
+            break;
+        case SyscallIdThreadWaitForTermination:
+            status = SyscallThreadWaitForTermination((UM_HANDLE)pSyscallParameters[0], (STATUS*)pSyscallParameters[1]);
+            break;
+        case SyscallIdThreadCloseHandle:
+            status = SyscallThreadCloseHandle((UM_HANDLE)pSyscallParameters[0]);
+            break;
+        case SyscallIdProcessCreate:
+            status = SyscallProcessCreate(
+                (char*)pSyscallParameters[0],
+                (QWORD)pSyscallParameters[1],
+                (char*)pSyscallParameters[2],
+                (QWORD)pSyscallParameters[3],
+                (UM_HANDLE*)pSyscallParameters[4]);
+            break;
         case SyscallIdProcessExit:
             status = SyscallProcessExit((STATUS)pSyscallParameters[0]);
             break;
@@ -97,9 +113,6 @@ SyscallHandler(
         //        (BOOLEAN)pSyscallParameters[2],
         //        (BOOLEAN)pSyscallParameters[3],
         //        (UM_HANDLE*)pSyscallParameters[4]);
-		case SyscallIdThreadExit:
-			status = SyscallThreadExit((STATUS)pSyscallParameters[0]);
-			break;
         default:
             LOG_ERROR("Unimplemented syscall called from User-space!\n");
             status = STATUS_UNSUPPORTED;
@@ -211,6 +224,155 @@ SyscallThreadExit(
 }
 
 STATUS
+SyscallThreadCreate(
+    IN      PFUNC_ThreadStart       StartFunction,
+    IN_OPT  PVOID                   Context,
+    OUT     UM_HANDLE* ThreadHandle
+)
+{
+    if (StartFunction == NULL || MmuIsKernelSpace((PVOID)StartFunction)) {
+        return STATUS_INVALID_PARAMETER1;
+    }
+
+    if (Context != NULL && MmuIsKernelSpace((PVOID)Context)) {
+        return STATUS_INVALID_PARAMETER2;
+    }
+
+    if (ThreadHandle == NULL) {
+        return STATUS_INVALID_PARAMETER3;
+    }
+
+    PPROCESS pProcess = GetCurrentProcess();
+    PTHREAD pThread;
+
+    STATUS status = ThreadCreateEx("Thread from Syscall", ThreadPriorityDefault, StartFunction, Context, &pThread, pProcess);
+
+    if (status != STATUS_SUCCESS) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    pProcess->CurrentMaximumHandle++;
+    pThread->ThreadHandle = pProcess->CurrentMaximumHandle;
+
+    INTR_STATE dummyState;
+    LockAcquire(&pProcess->ThreadTableLock, &dummyState);
+    HashTableInsert(&pProcess->ThreadTable, &pThread->ThreadTableEntry);
+    LockRelease(&pProcess->ThreadTableLock, dummyState);
+
+    *ThreadHandle = pThread->ThreadHandle;
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadGetTid(
+    IN_OPT  UM_HANDLE               ThreadHandle,
+    OUT     TID* ThreadId
+)
+{
+    PTHREAD pThread;
+    if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
+        pThread = GetCurrentThread();
+
+        if (pThread == NULL) {
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        *ThreadId = pThread->Id;
+        return STATUS_SUCCESS;
+    }
+
+    if (ThreadId == NULL || MmuIsKernelSpace((PVOID)ThreadId)) {
+        return STATUS_INVALID_PARAMETER2;
+    }
+
+    PPROCESS pProcess = GetCurrentProcess();
+
+    INTR_STATE dummyState;
+    LockAcquire(&pProcess->ThreadTableLock, &dummyState);
+    PHASH_ENTRY threadEntry = HashTableLookup(&pProcess->ThreadTable, (PHASH_KEY)&ThreadHandle);
+    LockRelease(&pProcess->ThreadTableLock, dummyState);
+
+    if (threadEntry == NULL) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    pThread = CONTAINING_RECORD(threadEntry, THREAD, ThreadTableEntry);
+    *ThreadId = pThread->Id;
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadWaitForTermination(
+    IN      UM_HANDLE               ThreadHandle,
+    OUT     STATUS* TerminationStatus
+)
+{
+    if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
+        return STATUS_INVALID_PARAMETER1;
+    }
+
+    if (TerminationStatus == NULL || MmuIsKernelSpace((PVOID) TerminationStatus)) {
+        return STATUS_INVALID_PARAMETER2;
+    }
+
+    PPROCESS pProcess = GetCurrentProcess();
+
+    INTR_STATE dummyState;
+    LockAcquire(&pProcess->ThreadTableLock, &dummyState);
+    PHASH_ENTRY threadEntry = HashTableLookup(&pProcess->ThreadTable, (PHASH_KEY)&ThreadHandle);
+    LockRelease(&pProcess->ThreadTableLock, dummyState);
+
+    if (threadEntry == NULL) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    PTHREAD pThread = CONTAINING_RECORD(threadEntry, THREAD, ThreadTableEntry);
+
+    if (pThread->State == ThreadStateDying) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    LOGL("Termination %X", TerminationStatus);
+
+    ThreadWaitForTermination(pThread, TerminationStatus);
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadCloseHandle(
+    IN      UM_HANDLE               ThreadHandle
+)
+{
+    if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
+        return STATUS_INVALID_PARAMETER1;
+    }
+
+    PPROCESS pProcess = GetCurrentProcess();
+
+    INTR_STATE dummyState;
+    LockAcquire(&pProcess->ThreadTableLock, &dummyState);
+    PHASH_ENTRY threadEntry = HashTableLookup(&pProcess->ThreadTable, (PHASH_KEY)&ThreadHandle);
+    LockRelease(&pProcess->ThreadTableLock, dummyState);
+
+    if (threadEntry == NULL) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    PTHREAD pThread = CONTAINING_RECORD(threadEntry, THREAD, ThreadTableEntry);
+
+    LockAcquire(&pProcess->ThreadTableLock, &dummyState);
+    HashTableRemove(&pProcess->ThreadTable, (PHASH_KEY)&ThreadHandle);
+    LockRelease(&pProcess->ThreadTableLock, dummyState);
+
+    ThreadCloseHandle(pThread);
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
 SyscallProcessExit(
     IN      STATUS                  ExitStatus
     )
@@ -244,20 +406,56 @@ SyscallProcessExit(
 //    return SyscallEntry(SyscallIdFileCreate, Path, PathLength, Directory, Create, FileHandle);
 //}
 
+STATUS
+SyscallProcessCreate(
+    IN_READS_Z(PathLength)
+    char* ProcessPath,
+    IN          QWORD               PathLength,
+    IN_READS_OPT_Z(ArgLength)
+    char* Arguments,
+    IN          QWORD               ArgLength,
+    OUT         UM_HANDLE* ProcessHandle
+)
+{
+    UNREFERENCED_PARAMETER(ArgLength);
+    char absolutePath[MAX_PATH];
+    PPROCESS pCurrentProcess = GetCurrentProcess();
+    PPROCESS pChildProcess;
 
-//STATUS
-//SyscallProcessCreate(
-//    IN_READS_Z(PathLength)
-//    char* ProcessPath,
-//    IN          QWORD               PathLength,
-//    IN_READS_OPT_Z(ArgLength)
-//    char* Arguments,
-//    IN          QWORD               ArgLength,
-//    OUT         UM_HANDLE* ProcessHandle
-//    )
-//{
-//    
-//}
+    if (ProcessPath == NULL) {
+        return STATUS_INVALID_PARAMETER1;
+    }
+
+    if (PathLength <= 0) {
+        return STATUS_INVALID_PARAMETER2;
+    }
+
+    if (ProcessPath == strrchr(ProcessPath, '\\')) {
+        sprintf(absolutePath, "C:\\Applications\\%s", ProcessPath);
+    }
+    else {
+        strcpy(absolutePath, ProcessPath);
+    }
+
+    LOG("gsfsdfsf\n");
+    STATUS processCreateStatus = ProcessCreate(absolutePath, Arguments, &pChildProcess);
+
+    if (SUCCEEDED(processCreateStatus))
+    {
+
+        pCurrentProcess->CurrentMaximumHandle++;
+        pChildProcess->ProcessHandle = pCurrentProcess->CurrentMaximumHandle;
+        *ProcessHandle = pCurrentProcess->CurrentMaximumHandle;
+
+        LOG("CURRENT PROCESS STATUS %U\n", pCurrentProcess->TerminationStatus);
+        LOG("CHILD PROCESS STATUS %U\n", pChildProcess->TerminationStatus);
+        HashTableInsert(&pCurrentProcess->ChildProcessTable, &pChildProcess->ChildProcessEntry);
+        LOG("CURRENT PROCESS STATUS %U\n", pCurrentProcess->TerminationStatus);
+        LOG("CHILD PROCESS STATUS %U\n", pChildProcess->TerminationStatus);
+        return STATUS_SUCCESS;
+    }
+    return processCreateStatus;
+}
 
 
 STATUS

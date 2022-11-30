@@ -9,6 +9,7 @@
 // WaitedMutex field in Thread structure.
 #include "mutex.h"
 #include "hash_table.h"
+#include "syscall_defs.h"
 
 typedef enum _THREAD_STATE
 {
@@ -111,6 +112,7 @@ typedef struct _THREAD
 
     // An entry  to the Threadtable of the process which created the thread.
     HASH_ENTRY              ThreadTableEntry;
+    UM_HANDLE               ThreadHandle;
 } THREAD, *PTHREAD;
 
 //******************************************************************************

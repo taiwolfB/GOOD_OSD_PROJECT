@@ -516,6 +516,30 @@ _ProcessInit(
         InsertTailList(&m_processData.ProcessList, &pProcess->NextProcess);
         MutexRelease(&m_processData.ProcessListLock);
 
+        pProcess->CurrentMaximumHandle = 0;
+        pProcess->ProcessHandle = 0;
+
+        DWORD childProcessTableHashSize = HashTablePreinit(&pProcess->ChildProcessTable, 128, sizeof(UM_HANDLE));
+        PHASH_TABLE_DATA pChildProcessHashTableData = ExAllocatePoolWithTag(0, childProcessTableHashSize, HEAP_TEST_TAG, 0);
+        if (NULL == pChildProcessHashTableData)
+        {
+            LOG_FUNC_ERROR_ALLOC("ExAllocatePoolWithTag", childProcessTableHashSize);
+            status = STATUS_HEAP_INSUFFICIENT_RESOURCES;
+            __leave;
+        }
+        HashTableInit(&pProcess->ChildProcessTable, pChildProcessHashTableData, HashFuncGenericIncremental, FIELD_OFFSET(PROCESS, ProcessHandle) - FIELD_OFFSET(PROCESS, ChildProcessEntry));
+
+        LockInit(&pProcess->ThreadTableLock);
+        DWORD threadTableHashSize = HashTablePreinit(&pProcess->ThreadTable, 128, sizeof(UM_HANDLE));
+        PHASH_TABLE_DATA pThreadTableData = ExAllocatePoolWithTag(0, threadTableHashSize, HEAP_TEST_TAG, 0);
+        if (NULL == pThreadTableData)
+        {
+            LOG_FUNC_ERROR_ALLOC("ExAllocatePoolWithTag", threadTableHashSize);
+            status = STATUS_HEAP_INSUFFICIENT_RESOURCES;
+            __leave;
+        }
+        HashTableInit(&pProcess->ThreadTable, pThreadTableData, HashFuncGenericIncremental, FIELD_OFFSET(THREAD, ThreadHandle) - FIELD_OFFSET(THREAD, ThreadTableEntry));
+        
         LOG_TRACE_PROCESS("Process with PID 0x%X created\n", pProcess->Id);
     }
     __finally

@@ -68,6 +68,8 @@ typedef struct _PROCESS
     // Hash table containing entries of the form (UM_HANDLE, THREAD), 
     // representing the threads created by the current process.
 
+    LOCK                            ThreadTableLock;
+    _Guarded_by_(ThreadTableLock)
     HASH_TABLE                      ThreadTable;
     // Hash table containing entries of the form (UM_HANDLE, FILE_OBJECT), 
     // representing the files created by the current process.
@@ -78,6 +80,8 @@ typedef struct _PROCESS
 
     // The value of the latest created handle.
     UM_HANDLE                       CurrentMaximumHandle;
+
+    UM_HANDLE                       ProcessHandle;
 } PROCESS, *PPROCESS;
 
 //******************************************************************************
