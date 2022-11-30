@@ -1,4 +1,4 @@
-#include "HAL9000.h"
+﻿#include "HAL9000.h"
 #include "thread_internal.h"
 #include "synch.h"
 #include "cpumu.h"
@@ -1096,6 +1096,7 @@ _ThreadSetupInitialState(
 //  |                 Dummy RA = 0xDEADC0DE                         |
 //  -----------------------------------------------------------------
 //  USER STACK BASE
+
 static
 STATUS
 _ThreadSetupMainThreadUserStack(
@@ -1107,11 +1108,94 @@ _ThreadSetupMainThreadUserStack(
     ASSERT(InitialStack != NULL);
     ASSERT(ResultingStack != NULL);
     ASSERT(Process != NULL);
+	
 
-    *ResultingStack = (PVOID)PtrDiff(InitialStack, SHADOW_STACK_SIZE + sizeof(PVOID));
+    //LOG("Initial stack : 0x%X\n",InitialStack);
+	
+	//stackAlligmnet
+	QWORD stackAlligmnet = 0;
+	QWORD stackSize = strlen(Process->FullCommandLine) + Process->NumberOfArguments * sizeof(char*) + sizeof(char**) + SHADOW_STACK_SIZE + sizeof(QWORD) + sizeof(PVOID);
+	
+	//Calculate the stack allignment
 
+    if (stackSize % 0x10 < 8) {
+        stackAlligmnet = 8 - stackSize % 0x10;
+    }
+    else if(stackSize % 0x10 > 8) {
+        stackAlligmnet = 0x10 - stackSize % 0x10 + 8;
+    }
+
+	//Get final stack size
+    stackSize += stackAlligmnet;
+	
+	//stackBuffer
+    PVOID stackBuffer = NULL;
+    
+    *ResultingStack = (PVOID)PtrDiff(InitialStack, stackSize);
+    //LOG("Final stack : 0x%X\n", *ResultingStack);
+    //allocate the stack
+    MmuGetSystemVirtualAddressForUserBuffer(*ResultingStack, stackSize, PAGE_RIGHTS_READWRITE, Process, &stackBuffer);
+    
+    //clear the mem
+    memzero(stackBuffer, (DWORD)stackSize);
+    //LOG("Got the virtual mapping\n");
+    
+    //Add the stack data
+	//Since we are using the stack from the bottom up we must first add the stack dummy return address
+    QWORD currentOffset = 0;
+	*(PQWORD)PtrOffset(stackBuffer, currentOffset) = 0xab12345;
+    //LOG("Added dummy return adr\n");
+	//LOG("Dummmy return : 0x%X\n", stackBuffer);
+	
+	//We will now add the nr of arguments
+    currentOffset += sizeof(void*);
+	*(PQWORD)PtrOffset(stackBuffer, currentOffset) = Process->NumberOfArguments;
+    //LOG("Added nr args\n");
+	//LOG("Nr args addr. : 0x%X\n", PtrOffset(stackBuffer, currentOffset));
+	
+	//We will now add the argv pointer
+    currentOffset += sizeof(QWORD);
+	*(char***)PtrOffset(stackBuffer, currentOffset) = (char**)PtrOffset(ResultingStack, currentOffset + 0x10);
+    //LOG("Added argv pointer\n");
+	//LOG("argv pointer : 0x%X\n", PtrOffset(stackBuffer, currentOffset));
+	
+    currentOffset += sizeof(char**);
+	//Now to add the shadowSpace
+    *(PQWORD)PtrOffset(stackBuffer, currentOffset) = 0xDEADBEEF;
+    currentOffset += sizeof(void*);
+    *(PQWORD)PtrOffset(stackBuffer, currentOffset) = 0xDEADBEEF;
+    currentOffset += sizeof(void*);
+    //LOG("Added shadow space\n");
+	    
+    
+    //Final step adding the params	
+	
+    char* args = Process->FullCommandLine;
+    char* token = (char*)strtok_s(NULL, " ", &args);
+	QWORD dataOffset = currentOffset + (Process->NumberOfArguments * sizeof(char*));
+    //LOG("Adding data\n");
+    while (token != NULL) {
+		*(char**)PtrOffset(stackBuffer, currentOffset) = (char*)PtrOffset(*ResultingStack, dataOffset);
+        //LOG("argP 0x%X  argVal 0x%X\n", PtrOffset(stackBuffer, currentOffset), PtrOffset(*ResultingStack, dataOffset));
+				
+		//add string
+        strcpy((char*)PtrOffset(stackBuffer, dataOffset), token);
+					
+		//add offsets
+		currentOffset += sizeof(char*);
+        dataOffset += strlen(token) + 1;
+       // LOG("strLen %d", strlen(token) + 1);
+		
+		token = (char*)strtok_s(NULL, " ", &args);
+	}
+	
+    MmuFreeSystemVirtualAddressForUserBuffer((PVOID)stackBuffer);
+    //LOG("Freed the virtual mapping\n");
+	
+ 
     return STATUS_SUCCESS;
 }
+
 
 REQUIRES_EXCL_LOCK(m_threadSystemData.ReadyThreadsLock)
 RELEASES_EXCL_AND_NON_REENTRANT_LOCK(m_threadSystemData.ReadyThreadsLock)

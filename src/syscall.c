@@ -7,6 +7,7 @@
 #include "mmu.h"
 #include "process_internal.h"
 #include "dmp_cpu.h"
+#include "thread.h"
 
 extern void SyscallEntry();
 
@@ -62,7 +63,7 @@ SyscallHandler(
         pSyscallParameters = (PQWORD)usermodeProcessorState->RegisterValues[RegisterRbp] + 1;
 
         // Dispatch syscalls
-        LOG("System call ID is %u\n", sysCallId);
+        //LOG("System call ID is %u\n", sysCallId);
         switch (sysCallId)
         {
         case SyscallIdIdentifyVersion:
@@ -96,6 +97,9 @@ SyscallHandler(
         //        (BOOLEAN)pSyscallParameters[2],
         //        (BOOLEAN)pSyscallParameters[3],
         //        (UM_HANDLE*)pSyscallParameters[4]);
+		case SyscallIdThreadExit:
+			status = SyscallThreadExit((STATUS)pSyscallParameters[0]);
+			break;
         default:
             LOG_ERROR("Unimplemented syscall called from User-space!\n");
             status = STATUS_UNSUPPORTED;
@@ -194,6 +198,15 @@ SyscallValidateInterface(
         return STATUS_INCOMPATIBLE_INTERFACE;
     }
 
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadExit(
+    IN  STATUS                      ExitStatus
+)
+{
+    ThreadExit(ExitStatus);
     return STATUS_SUCCESS;
 }
 
