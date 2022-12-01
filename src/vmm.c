@@ -243,6 +243,13 @@ VmmMapMemoryEx(
     return pVirtualAddress;
 }
 
+BOOLEAN
+VmmIsKernelSpace(
+    IN          PVOID                               Address
+) {
+    return _VmIsKernelAddress(Address);
+}
+
 void
 VmmMapMemoryInternal(
     IN      PPAGING_DATA            PagingData,

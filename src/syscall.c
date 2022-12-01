@@ -11,6 +11,7 @@
 #include "io.h"
 #include "vmm.h"
 #include "iomu.h"
+#include "thread_internal.h"
 
 extern void SyscallEntry();
 
@@ -96,9 +97,21 @@ SyscallHandler(
                 (UM_HANDLE)pSyscallParameters[0],
                 (STATUS*)pSyscallParameters[1]);
             break;
-		case SyscallIdThreadExit:
-			status = SyscallThreadExit((STATUS)pSyscallParameters[0]);
-			break;
+        case SyscallIdThreadExit:
+            status = SyscallThreadExit((STATUS)pSyscallParameters[0]);
+            break;
+        case SyscallIdThreadCreate:
+            status = SyscallThreadCreate((PFUNC_ThreadStart)pSyscallParameters[0], (PVOID)pSyscallParameters[1], (UM_HANDLE*)pSyscallParameters[2]);
+            break;
+        case SyscallIdThreadGetTid:
+            status = SyscallThreadGetTid((UM_HANDLE)pSyscallParameters[0], (TID*)pSyscallParameters[1]);
+            break;
+        case SyscallIdThreadWaitForTermination:
+            status = SyscallThreadWaitForTermination((UM_HANDLE)pSyscallParameters[0], (STATUS*)pSyscallParameters[1]);
+            break;
+        case SyscallIdThreadCloseHandle:
+            status = SyscallThreadCloseHandle((UM_HANDLE)pSyscallParameters[0]);
+            break;
         case SyscallIdFileWrite:
             status = SyscallFileWrite(
                 (UM_HANDLE)pSyscallParameters[0],
@@ -363,15 +376,131 @@ SyscallProcessGetPid(
     return STATUS_SUCCESS;
 }
 
-
-
 STATUS
 SyscallThreadExit(
     IN  STATUS                      ExitStatus
-)
-{
+) {
     ThreadExit(ExitStatus);
-    return ExitStatus;
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadCreate(
+    IN      PFUNC_ThreadStart       StartFunction,
+    IN_OPT  PVOID                   Context,
+    OUT     UM_HANDLE* ThreadHandle
+) {
+    if (StartFunction == NULL || MmuIsKernelSpace((PVOID)StartFunction)) {
+        return STATUS_INVALID_PARAMETER1;
+    }
+
+    if (Context != NULL && MmuIsKernelSpace(Context)) {
+        return STATUS_INVALID_PARAMETER2;
+    }
+
+    if (ThreadHandle == NULL) {
+        return STATUS_INVALID_PARAMETER3;
+    }
+
+    PPROCESS pProcess = GetCurrentProcess();
+    PTHREAD pThread;
+
+    STATUS status = ThreadCreateEx("Thread from Syscall", ThreadPriorityDefault, StartFunction, Context, &pThread, pProcess);
+
+    if (status != STATUS_SUCCESS) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    pProcess->CurrentMaximumHandle++;
+    pThread->ThreadHandle = pProcess->CurrentMaximumHandle;
+    HashTableInsert(&pProcess->ThreadTable, &pThread->ThreadTableEntry);
+
+    *ThreadHandle = pThread->ThreadHandle;
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadGetTid(
+    IN_OPT  UM_HANDLE               ThreadHandle,
+    OUT     TID* ThreadId
+) {
+    PTHREAD pThread;
+    if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
+        pThread = GetCurrentThread();
+
+        if (pThread == NULL) {
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        *ThreadId = pThread->Id;
+        return STATUS_SUCCESS;
+    }
+
+    if (ThreadId == NULL || MmuIsKernelSpace((PVOID)ThreadId)) {
+        return STATUS_INVALID_PARAMETER2;
+    }
+
+    PPROCESS pProcess = GetCurrentProcess();
+    PHASH_ENTRY threadEntry = HashTableLookup(&pProcess->ThreadTable, (PHASH_KEY)&ThreadHandle);
+
+    if (threadEntry == NULL) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    pThread = CONTAINING_RECORD(threadEntry, THREAD, ThreadTableEntry);
+    *ThreadId = pThread->Id;
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadWaitForTermination(
+    IN      UM_HANDLE               ThreadHandle,
+    OUT     STATUS* TerminationStatus
+) {
+    if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
+        return STATUS_INVALID_PARAMETER1;
+    }
+
+    if (TerminationStatus == NULL || MmuIsKernelSpace((PVOID)TerminationStatus)) {
+        return STATUS_INVALID_PARAMETER2;
+    }
+
+    PPROCESS pProcess = GetCurrentProcess();
+    PHASH_ENTRY threadEntry = HashTableLookup(&pProcess->ThreadTable, (PHASH_KEY)&ThreadHandle);
+
+    if (threadEntry == NULL) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    PTHREAD pThread = CONTAINING_RECORD(threadEntry, THREAD, ThreadTableEntry);
+    ThreadWaitForTermination(pThread, TerminationStatus);
+
+    return STATUS_SUCCESS;
+}
+
+STATUS
+SyscallThreadCloseHandle(
+    IN      UM_HANDLE               ThreadHandle
+) {
+    if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
+        return STATUS_INVALID_PARAMETER1;
+    }
+
+    PPROCESS pProcess = GetCurrentProcess();
+    PHASH_ENTRY threadEntry = HashTableLookup(&pProcess->ThreadTable, (PHASH_KEY)&ThreadHandle);
+
+    if (threadEntry == NULL) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    PTHREAD pThread = CONTAINING_RECORD(threadEntry, THREAD, ThreadTableEntry);
+    HashTableRemove(&pProcess->ThreadTable, (PHASH_KEY)&ThreadHandle);
+
+    ThreadCloseHandle(pThread);
+
+    return STATUS_SUCCESS;
 }
 
 STATUS
@@ -500,8 +629,6 @@ SyscallFileRead(
     OUT QWORD* BytesRead
 )
 {
-    UNREFERENCED_PARAMETER(BytesToRead);
-    UNREFERENCED_PARAMETER(Buffer);
     if (FileHandle == UM_INVALID_HANDLE_VALUE ||
         FileHandle == UM_FILE_HANDLE_STDOUT || 
         FileHandle > 64 ||
@@ -515,7 +642,7 @@ SyscallFileRead(
         return STATUS_UNSUCCESSFUL;
     }
 
-    if (IsBooleanFlagOn((QWORD)Buffer, (QWORD)1 << VA_HIGHEST_VALID_BIT))
+    if (MmuIsKernelSpace((PVOID)Buffer))
     {
         return STATUS_INVALID_PARAMETER2;
     }

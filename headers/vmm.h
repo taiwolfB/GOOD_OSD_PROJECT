@@ -308,3 +308,8 @@ VmmIsBufferValid(
     IN          BOOLEAN                             KernelAccess
     );
 
+
+BOOLEAN
+VmmIsKernelSpace(
+    IN          PVOID                               Address
+);

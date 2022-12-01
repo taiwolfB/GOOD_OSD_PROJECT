@@ -440,3 +440,8 @@ void
 MmuFreeSystemVirtualAddressForUserBuffer(
     IN          PVOID               KernelAddress
     );
+
+BOOLEAN
+MmuIsKernelSpace(
+    IN          PVOID                               Address
+);

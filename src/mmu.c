@@ -1139,6 +1139,13 @@ MmuFreeStack(
                     );
 }
 
+BOOLEAN
+MmuIsKernelSpace(
+    IN          PVOID                               Address
+) {
+    return VmmIsKernelSpace(Address);
+}
+
 STATUS
 MmuIsBufferValid(
     IN          PVOID               Buffer,
