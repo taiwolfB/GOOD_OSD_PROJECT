@@ -104,7 +104,7 @@ _IsrExceptionHandler(
     {
         errorCode = (DWORD)StackPointer->ErrorCode;
     }
-
+    
     if (ExceptionPageFault == InterruptIndex)
     {
         PVOID pfAddr;
@@ -113,7 +113,7 @@ _IsrExceptionHandler(
 
         pfAddr = __readcr2();
         LOG_TRACE_EXCEPTION("#PF address: 0x%X\n", pfAddr);
-        exceptionHandled = MmuSolvePageFault(pfAddr, errorCode );
+        exceptionHandled = MmuSolvePageFault(pfAddr, errorCode );      
         if (!exceptionHandled)
         {
             PPCPU pCpu;
@@ -141,6 +141,16 @@ _IsrExceptionHandler(
     else if (ExceptionGeneralProtection == InterruptIndex)
     {
         LOG_TRACE_EXCEPTION("RSP[0]: 0x%X\n", *((QWORD*)StackPointer->Registers.Rsp));
+    }
+
+    //Check if the page fault is coming from usermode, if so, kill the process
+    if (!exceptionHandled && !GdtIsSegmentPrivileged((WORD)StackPointer->Registers.CS))
+    {
+        //TO REMOVE FOR TEST
+        //LOG("USER MODE ERROR\n\n");
+        //Kill the process
+        ProcessTerminate(NULL);
+        exceptionHandled = TRUE;
     }
 
     // no use in logging if we solved the problem
