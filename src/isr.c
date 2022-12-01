@@ -143,6 +143,16 @@ _IsrExceptionHandler(
         LOG_TRACE_EXCEPTION("RSP[0]: 0x%X\n", *((QWORD*)StackPointer->Registers.Rsp));
     }
 
+    //Check if the page fault is coming from usermode, if so, kill the process
+    if (!exceptionHandled && !GdtIsSegmentPrivileged((WORD)StackPointer->Registers.CS))
+    {
+        //TO REMOVE FOR TEST
+        //LOG("USER MODE ERROR\n\n");
+        //Kill the process
+        exceptionHandled = TRUE;
+        ProcessTerminate(NULL);
+
+    }
     // no use in logging if we solved the problem
     if (!exceptionHandled)
     {

@@ -217,8 +217,7 @@ SyscallValidateInterface(
 STATUS
 SyscallThreadExit(
     IN  STATUS                      ExitStatus
-)
-{
+) {
     ThreadExit(ExitStatus);
     return STATUS_SUCCESS;
 }
@@ -228,13 +227,12 @@ SyscallThreadCreate(
     IN      PFUNC_ThreadStart       StartFunction,
     IN_OPT  PVOID                   Context,
     OUT     UM_HANDLE* ThreadHandle
-)
-{
+) {
     if (StartFunction == NULL || MmuIsKernelSpace((PVOID)StartFunction)) {
         return STATUS_INVALID_PARAMETER1;
     }
 
-    if (Context != NULL && MmuIsKernelSpace((PVOID)Context)) {
+    if (Context != NULL && MmuIsKernelSpace(Context)) {
         return STATUS_INVALID_PARAMETER2;
     }
 
@@ -268,8 +266,7 @@ STATUS
 SyscallThreadGetTid(
     IN_OPT  UM_HANDLE               ThreadHandle,
     OUT     TID* ThreadId
-)
-{
+) {
     PTHREAD pThread;
     if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
         pThread = GetCurrentThread();
@@ -307,8 +304,7 @@ STATUS
 SyscallThreadWaitForTermination(
     IN      UM_HANDLE               ThreadHandle,
     OUT     STATUS* TerminationStatus
-)
-{
+) {
     if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
         return STATUS_INVALID_PARAMETER1;
     }
@@ -323,18 +319,12 @@ SyscallThreadWaitForTermination(
     LockAcquire(&pProcess->ThreadTableLock, &dummyState);
     PHASH_ENTRY threadEntry = HashTableLookup(&pProcess->ThreadTable, (PHASH_KEY)&ThreadHandle);
     LockRelease(&pProcess->ThreadTableLock, dummyState);
-
+   
     if (threadEntry == NULL) {
         return STATUS_UNSUCCESSFUL;
     }
 
     PTHREAD pThread = CONTAINING_RECORD(threadEntry, THREAD, ThreadTableEntry);
-
-    if (pThread->State == ThreadStateDying) {
-        return STATUS_UNSUCCESSFUL;
-    }
-
-    LOGL("Termination %X", TerminationStatus);
 
     ThreadWaitForTermination(pThread, TerminationStatus);
 
@@ -344,8 +334,7 @@ SyscallThreadWaitForTermination(
 STATUS
 SyscallThreadCloseHandle(
     IN      UM_HANDLE               ThreadHandle
-)
-{
+) {
     if (ThreadHandle == UM_INVALID_HANDLE_VALUE) {
         return STATUS_INVALID_PARAMETER1;
     }
@@ -437,7 +426,6 @@ SyscallProcessCreate(
         strcpy(absolutePath, ProcessPath);
     }
 
-    LOG("gsfsdfsf\n");
     STATUS processCreateStatus = ProcessCreate(absolutePath, Arguments, &pChildProcess);
 
     if (SUCCEEDED(processCreateStatus))
@@ -447,11 +435,7 @@ SyscallProcessCreate(
         pChildProcess->ProcessHandle = pCurrentProcess->CurrentMaximumHandle;
         *ProcessHandle = pCurrentProcess->CurrentMaximumHandle;
 
-        LOG("CURRENT PROCESS STATUS %U\n", pCurrentProcess->TerminationStatus);
-        LOG("CHILD PROCESS STATUS %U\n", pChildProcess->TerminationStatus);
         HashTableInsert(&pCurrentProcess->ChildProcessTable, &pChildProcess->ChildProcessEntry);
-        LOG("CURRENT PROCESS STATUS %U\n", pCurrentProcess->TerminationStatus);
-        LOG("CHILD PROCESS STATUS %U\n", pChildProcess->TerminationStatus);
         return STATUS_SUCCESS;
     }
     return processCreateStatus;
